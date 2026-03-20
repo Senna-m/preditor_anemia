@@ -26,10 +26,6 @@ modelo = load_model()
 # REGRA DA OMS
 # ============================================================
 def diagnostico_oms(hemoglobina: float, sexo: int) -> dict:
-    """
-    Retorna diagnóstico baseado nos critérios da OMS.
-    sexo: 1 = Masculino, 0 = Feminino
-    """
     if sexo == 1:
         limite = 13.0
         grupo = "Homens"
@@ -45,6 +41,21 @@ def diagnostico_oms(hemoglobina: float, sexo: int) -> dict:
         "limite": limite,
         "hemoglobina": hemoglobina
     }
+
+def diagnostico_mcv(mcv: float) -> dict:
+    if mcv < 80:
+        classificacao = "Microcítico"
+        descricao = "Volume corpuscular abaixo do normal"
+        alerta = True
+    elif mcv <= 100:
+        classificacao = "Normocítico"
+        descricao = "Volume corpuscular dentro do esperado"
+        alerta = False
+    else:
+        classificacao = "Macrocítico"
+        descricao = "Volume corpuscular acima do normal"
+        alerta = True
+    return {"classificacao": classificacao, "descricao": descricao, "alerta": alerta, "mcv": mcv}
 
 # ============================================================
 # INTERFACE
@@ -102,13 +113,14 @@ if st.button("🔍 Analisar", use_container_width=True):
     prob = modelo.predict_proba(X)[0]
     confianca = prob[pred_modelo] * 100
 
-    # Diagnóstico OMS
+    # Diagnósticos
     oms = diagnostico_oms(hemoglobina, sexo)
+    mcv_resultado = diagnostico_mcv(mcv)
 
     # --- Exibir resultados lado a lado ---
     st.subheader("Resultado da Análise")
 
-    col_modelo, col_oms = st.columns(2)
+    col_modelo, col_oms, col_mcv = st.columns(3)
 
     with col_modelo:
         st.markdown("**🤖 Modelo preditivo (CatBoost)**")
@@ -130,6 +142,21 @@ if st.button("🔍 Analisar", use_container_width=True):
                 f"🟢 Dentro do esperado\n"
                 f"Hemoglobina: {hemoglobina} g/dL\n"
                 f"Limite OMS: {oms['limite']} g/dL"
+            )
+
+    with col_mcv:
+        st.markdown("**🔬 Análise MCV**")
+        if mcv_resultado["alerta"]:
+            st.error(
+                f"🔴 {mcv_resultado['classificacao']}\n"
+                f"{mcv_resultado['descricao']}\n"
+                f"MCV: {mcv} fL"
+            )
+        else:
+            st.success(
+                f"🟢 {mcv_resultado['classificacao']}\n"
+                f"{mcv_resultado['descricao']}\n"
+                f"MCV: {mcv} fL"
             )
 
     st.divider()
