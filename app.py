@@ -41,7 +41,7 @@ def diagnostico_oms(hemoglobina: float, sexo: int) -> dict:
         "limite": limite,
         "hemoglobina": hemoglobina
     }
-
+# MCV - Volume Corpuscular Médio
 def diagnostico_mcv(mcv: float) -> dict:
     if mcv < 80:
         classificacao = "Microcítico"
@@ -56,6 +56,21 @@ def diagnostico_mcv(mcv: float) -> dict:
         descricao = "Volume corpuscular acima do normal"
         alerta = True
     return {"classificacao": classificacao, "descricao": descricao, "alerta": alerta, "mcv": mcv}
+# HCM - Hemoglobina Corpuscular Média
+def diagnostico_mch(mch: float) -> dict:
+    if mch < 27:
+        classificacao = "Hipocromia"
+        descricao = "HCM abaixo do normal"
+        alerta = True
+    elif mch <= 33:
+        classificacao = "Normocromia"
+        descricao = "HCM dentro do esperado"
+        alerta = False
+    else:
+        classificacao = "Hipercromia"
+        descricao = "HCM acima do normal"
+        alerta = True
+    return {"classificacao": classificacao, "descricao": descricao, "alerta": alerta, "mch": mch}
 
 # ============================================================
 # INTERFACE
@@ -116,11 +131,11 @@ if st.button("🔍 Analisar", use_container_width=True):
     # Diagnósticos
     oms = diagnostico_oms(hemoglobina, sexo)
     mcv_resultado = diagnostico_mcv(mcv)
-
+    mch_resultado = diagnostico_mch(mch)
     # --- Exibir resultados lado a lado ---
     st.subheader("Resultado da Análise")
 
-    col_modelo, col_oms, col_mcv = st.columns(3)
+    col_modelo, col_oms, col_mcv, col_mch = st.columns(4)
 
     with col_modelo:
         st.markdown("**🤖 Modelo preditivo (CatBoost)**")
@@ -158,7 +173,20 @@ if st.button("🔍 Analisar", use_container_width=True):
                 f"{mcv_resultado['descricao']}\n"
                 f"MCV: {mcv} fL"
             )
-
+    with col_mch:
+        st.markdown("**🔬 Análise HCM**")
+        if mch_resultado["alerta"]:
+            st.error(
+            f"🔴 {mch_resultado['classificacao']}\n"
+            f"{mch_resultado['descricao']}\n"
+            f"HCM: {mch} pg"
+        )
+        else:
+            st.success(
+            f"🟢 {mch_resultado['classificacao']}\n"
+            f"{mch_resultado['descricao']}\n"
+            f"HCM: {mch} pg"
+        )
     st.divider()
 
     # --- Conclusão final ---
@@ -166,24 +194,44 @@ if st.button("🔍 Analisar", use_container_width=True):
 
     modelo_anemico = pred_modelo == 1
     oms_anemico = oms["anemico"]
+    marcadores_alterados = []
+
+    if mcv_resultado["alerta"]:
+        marcadores_alterados.append(f"MCV {mcv_resultado['classificacao']} ({mcv} fL)")
+    if mch_resultado["alerta"]:
+        marcadores_alterados.append(f"HCM {mch_resultado['classificacao']} ({mch} pg)")
+
+    texto_marcadores = ""
+    if marcadores_alterados:
+        texto_marcadores = "\n\n**Marcadores alterados:** " + " | ".join(marcadores_alterados)
 
     if modelo_anemico and oms_anemico:
         st.error(
             "⚠️ **Alta probabilidade de anemia.**\n\n"
             "Tanto o modelo preditivo quanto o critério da OMS indicam anemia. "
             "Recomenda-se avaliação médica."
+            + texto_marcadores
         )
     elif not modelo_anemico and not oms_anemico:
-        st.success(
-            "✅ **Sem indicativo de anemia.**\n\n"
-            "Tanto o modelo preditivo quanto o critério da OMS estão dentro do esperado."
-        )
+        if marcadores_alterados:
+            st.warning(
+                "🟡 **Sem indicativo direto de anemia, mas com marcadores alterados.**\n\n"
+                "O modelo e a OMS não indicam anemia, porém alguns marcadores estão fora do esperado. "
+                "Recomenda-se acompanhamento médico."
+                + texto_marcadores
+            )
+        else:
+            st.success(
+                "✅ **Sem indicativo de anemia.**\n\n"
+                "Tanto o modelo preditivo quanto o critério da OMS estão dentro do esperado."
+            )
     elif modelo_anemico and not oms_anemico:
         st.warning(
             "🟡 **Resultado divergente.**\n\n"
             "O modelo preditivo indica anemia, mas a hemoglobina está acima do limite da OMS. "
-            "Os outros marcadores (MCH, MCHC, MCV) podem estar alterados. "
+            "Os outros marcadores podem estar alterados. "
             "Recomenda-se avaliação médica para investigação."
+            + texto_marcadores
         )
     else:
         st.warning(
@@ -191,9 +239,9 @@ if st.button("🔍 Analisar", use_container_width=True):
             "A hemoglobina está abaixo do limite da OMS, mas o modelo preditivo "
             "não identificou padrão de anemia nos demais marcadores. "
             "Recomenda-se avaliação médica."
+            + texto_marcadores
         )
-
-    st.divider()
+        st.divider()
 
     # --- Tabela de referência OMS ---
     st.subheader("📋 Valores de Referência OMS")
